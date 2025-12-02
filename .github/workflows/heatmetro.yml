@@ -1,4 +1,4 @@
-name: Generate & Deploy Heatmap
+name: Generate & Deploy HeatMetro
 
 on:
   push:
@@ -12,12 +12,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. Bajar el repositorio actual (Donde está el repositories.db)
+      # 1. Checkout Data Repo (Where repositories.db is)
       - name: Checkout Data Repo
         uses: actions/checkout@v4
 
-      # 2. Bajar SOLO los scripts (Rama 'generator')
-      # AQUÍ ESTABA EL CAMBIO NECESARIO:
+      # 2. Checkout Generator Scripts
       - name: Checkout Generator Scripts
         uses: actions/checkout@v4
         with:
@@ -25,55 +24,43 @@ jobs:
           ref: generator
           path: scripts
 
-      # 3. Configurar Node.js
+      # 3. Setup Node.js
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # 4. Ejecutar el Generador
+      # 4. Generate JSON Data
       - name: Generate JSON Data
         run: |
-          echo "📦 Moviendo base de datos..."
-          # Movemos la db al contexto del script para que __dirname la encuentre
+          echo "Moving database..."
           cp repositories.db scripts/repositories.db
-
-          echo "⚙️ Instalando dependencias y generando..."
+          echo "Installing dependencies and generating..."
           cd scripts
           npm install
-
-          # Ejecutamos el script. Según jsonExport.service.js, esto creará la carpeta ./data
           node json.js
-
-          # Verificamos que se creó
           if [ ! -d "data" ]; then
-            echo "❌ Error: La carpeta data no se generó."
+            echo "Error: Data folder was not generated."
             exit 1
           fi
 
-      # 5. Descargar el Frontend Compilado (Release)
+      # 5. Download Frontend Build (Release)
       - name: Download Frontend Build
         run: |
-          echo "⬇️ Descargando frontend release..."
-          # Usamos la URL de tu release v1.0.0
+          echo "⬇Downloading frontend release..."
           wget -O frontend.zip https://github.com/ShinjiMC/HeatMetro/releases/download/v1.0.0/dist.zip
-
-          echo "📂 Descomprimiendo..."
+          echo "Unzipping..."
           unzip frontend.zip -d public_site
 
-      # 6. Inyectar Data en el Frontend
+      # 6. Inject Data into Frontend
       - name: Inject Data
         run: |
-          echo "💉 Pegando carpeta data en el sitio estático..."
-          # Creamos la carpeta data dentro del sitio descomprimido
+          echo "Injecting data into static site..."
           mkdir -p public_site/data
-
-          # jsonExport.service.js genera la data en scripts/data, la movemos a public/data
           cp -r scripts/data/* public_site/data/
+          echo "Final structure ready."
 
-          echo "✅ Estructura final lista."
-
-      # 7. Desplegar a GitHub Pages
+      # 7. Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
