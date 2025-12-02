@@ -1,0 +1,81 @@
+name: Generate & Deploy Heatmap
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Bajar el repositorio actual (Donde está el repositories.db)
+      - name: Checkout Data Repo
+        uses: actions/checkout@v4
+
+      # 2. Bajar SOLO los scripts (Rama 'generator')
+      # AQUÍ ESTABA EL CAMBIO NECESARIO:
+      - name: Checkout Generator Scripts
+        uses: actions/checkout@v4
+        with:
+          repository: ShinjiMC/HeatMetro
+          ref: generator
+          path: scripts
+
+      # 3. Configurar Node.js
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # 4. Ejecutar el Generador
+      - name: Generate JSON Data
+        run: |
+          echo "📦 Moviendo base de datos..."
+          # Movemos la db al contexto del script para que __dirname la encuentre
+          cp repositories.db scripts/repositories.db
+
+          echo "⚙️ Instalando dependencias y generando..."
+          cd scripts
+          npm install
+
+          # Ejecutamos el script. Según jsonExport.service.js, esto creará la carpeta ./data
+          node json.js
+
+          # Verificamos que se creó
+          if [ ! -d "data" ]; then
+            echo "❌ Error: La carpeta data no se generó."
+            exit 1
+          fi
+
+      # 5. Descargar el Frontend Compilado (Release)
+      - name: Download Frontend Build
+        run: |
+          echo "⬇️ Descargando frontend release..."
+          # Usamos la URL de tu release v1.0.0
+          wget -O frontend.zip https://github.com/ShinjiMC/HeatMetro/releases/download/v1.0.0/dist.zip
+
+          echo "📂 Descomprimiendo..."
+          unzip frontend.zip -d public_site
+
+      # 6. Inyectar Data en el Frontend
+      - name: Inject Data
+        run: |
+          echo "💉 Pegando carpeta data en el sitio estático..."
+          # Creamos la carpeta data dentro del sitio descomprimido
+          mkdir -p public_site/data
+
+          # jsonExport.service.js genera la data en scripts/data, la movemos a public/data
+          cp -r scripts/data/* public_site/data/
+
+          echo "✅ Estructura final lista."
+
+      # 7. Desplegar a GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: public_site
+          branch: gh-pages
